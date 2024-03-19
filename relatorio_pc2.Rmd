@@ -1,0 +1,144 @@
+---
+title: "Relatório - Análise dos dados para o trabalho final de PC2"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r cars, include=FALSE}
+
+# pacotes utilizados
+if(require(dplyr) == F) install.packages('dplyr');
+if(require(ggplot2) == F) install.packages('ggplot');
+if(require(readr) == F) install.packages('readr');
+if(require(readxl) == F) install.packages('readxl');
+if(require(tidyr) == F) install.packages('tidyr');
+if(require(tidyverse) == F) install.packages('tidyverse');
+if(require(here) == F) install.packages('here');
+if(require(sjPlot) == F) install.packages('sjPlot');
+if(require(kableExtra) == F) install.packages('kableExtra');
+if(require(gridExtra) == F) install.packages('gridExtra');
+```
+
+```{R include=FALSE}
+# banco de dados completo - V-DEM
+vdem <- read.csv(here("data/vdem14.csv"))
+
+# filtro do banco de dados pelo ano de 2023
+vdem2023 <- vdem %>% filter(year == 2023)
+```
+
+### Regressão utilizando os dados de *todos os países* para o ano de 2023
+
+```{r pressure, echo=TRUE, warning=FALSE}
+
+# VD: Índice de Democracia Liberal
+# VIs: Polarização Política e Polarização da Sociedade
+
+regressao <- lm(v2x_libdem ~ v2smpolsoc + v2cacamps, data = vdem2023)
+summary(regressao)
+
+```
+
+**Conheça a escala das variáveis:**
+
+`v2x_libdem` - Question: To what extent is the ideal of liberal democracy achieved?
+  - Baixa democracia: 0 a alta democracia: 1
+  
+`v2smpolsoc` - How would you characterize the differences of opinions on major political issues in this society?
+  - Séria Polarização: 0 a Sem polarização: 4
+  
+`v2cacamps` - Question: Is society polarized into antagonistic, political camps?
+  - De forma nenhuma: 0 a Sim, em uma larga medida: 4
+
+### Resumo da regressão
+```{R echo=FALSE}
+# Crie a tabela de resultados da regressão
+tabela_resultados <- summary(regressao)$coefficients %>%
+  as.data.frame() %>%
+  rownames_to_column(var = "Coeficiente") %>%
+  kable(format = "html", align = "c", caption = "Tabela de Resultados da Regressão") %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  add_header_above(c(" " = 1, "Estimativa" = 3, " " = 1)) %>%
+  column_spec(1, bold = TRUE)
+
+# Exiba a tabela
+tabela_resultados
+```
+
+```{R include=FALSE}
+forest_raw <- plot_model(regressao) +
+  labs(x = "Variáveis Independentes",
+       y = "Estimativas",
+       title = "Gráfico de Floresta",
+       subtitle = "Efeitos das variáveis independentes na variável de índice de Democracia Liberal",
+       caption = "Fonte: V-Dem")
+
+# Alterando o tema do gráfico para 'clean'
+forest_raw <- forest_raw + theme_minimal()
+
+```
+
+### Visualização das estimativas do modelo
+
+```{R echo=FALSE}
+# Exibindo o gráfico
+print(forest_raw)
+```
+
+### Correlações
+
+```{R echo=FALSE, message=FALSE, warning=FALSE}
+# Definindo os plots
+plot_regressao <- ggplot(data = vdem2023, aes(x = v2cacamps, y = v2x_libdem)) +
+  geom_point() +  
+  geom_smooth(method = "lm", se = TRUE) +  # Adiciona a linha de regressão
+  labs(x = "Polarização política (v2cacamps)", y = "índice de democracia liberal (v2x_libdem)", title = "Correlação - VI 1") + theme_minimal()
+
+plot_regressao2 <- ggplot(data = vdem2023, aes(x = v2smpolsoc, y = v2x_libdem)) +
+  geom_point() +  
+  geom_smooth(method = "lm", se = TRUE) +  # Adiciona a linha de regressão
+  labs(x = "Polarização da sociedade (v2smpolsoc)", y = "índice de democracia liberal (v2x_libdem)", title = "Correlação - VI 2") + theme_minimal()
+
+# Organizando os plots lado a lado
+plots <- grid.arrange(plot_regressao, plot_regressao2, ncol = 2)
+
+# Exibindo os plots
+print(plots)
+
+```
+
+### Regressão utilizando os dados dos *25 países mais polarizados e 25 países menos polarizados* para o ano de 2023
+
+```{R include=FALSE}
+## os mais polarizados de acordo com a variável v2cacamps (polarização política)
+
+vdem_sorted <- vdem2023 %>% 
+  arrange(desc(v2cacamps))
+
+# Selecionar os 25 mais polarizados e os 25 menos polarizados
+toppol_25 <- vdem_sorted %>% slice(1:25)
+bottompol_25 <- vdem_sorted %>% slice((n() - 24):n())
+
+# Juntar os dois conjuntos de dados
+polarized_data <- bind_rows(toppol_25, bottompol_25)
+
+```
+
+```{R}
+# Correlação para o banco de dados com os 50 países
+
+cor50 <- lm(v2x_libdem ~ v2cacamps, data = polarized_data)
+
+summary(cor50)
+
+plot_regressao3 <- ggplot(data = polarized_data, aes(x = v2smpolsoc, y = v2x_libdem)) +
+  geom_point() +  
+  geom_smooth(method = "lm", se = TRUE) +  # Adiciona a linha de regressão
+  labs(x = "Polarização política", y = "índice de democracia liberal (v2x_libdem)", title = "Correlação - VI 2") + theme_minimal()
+
+plot_regressao3
+
+```
